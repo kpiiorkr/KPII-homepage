@@ -413,19 +413,19 @@ def render_header():
     with menu_cols[0]:
         if st.button("협회소개"):
             st.session_state.target_section = "intro"
-            st.experimental_rerun()
+            st.rerun()
     with menu_cols[1]:
         if st.button("사회공헌활동"):
             st.session_state.target_section = "csr"
-            st.experimental_rerun()
+            st.rerun()
     with menu_cols[2]:
         if st.button("자료실"):
             st.session_state.target_section = "library"
-            st.experimental_rerun()
+            st.rerun()
     with menu_cols[3]:
         if st.button("회원사"):
             st.session_state.target_section = "members"
-            st.experimental_rerun()
+            st.rerun()
 
     st.markdown("")  # 간격
 
@@ -448,7 +448,7 @@ def render_header():
         with cols[i]:
             if st.button(kw):
                 st.session_state.search_query = kw
-                st.experimental_rerun()
+                st.rerun()
 
 
 def render_icon_menu():
@@ -507,11 +507,11 @@ def render_main_area():
                 with b1:
                     if st.button("◀"):
                         st.session_state.banner_index = (idx - 1) % len(banners)
-                        st.experimental_rerun()
+                        st.rerun()
                 with b3:
                     if st.button("▶"):
                         st.session_state.banner_index = (idx + 1) % len(banners)
-                        st.experimental_rerun()
+                        st.rerun()
                 with b2:
                     # dot indicator
                     dots_html = '<div class="banner-dots">'
@@ -690,9 +690,10 @@ with st.sidebar:
                 st.session_state.is_admin = True
                 st.session_state.admin_username = username
                 st.success("관리자 로그인 성공")
-                st.experimental_rerun()
+                st.rerun()   # ✅ 새 이름
             else:
                 st.error("ID 또는 비밀번호가 올바르지 않습니다.")
+
 
     # 로그인 후
     else:
@@ -736,7 +737,7 @@ with st.sidebar:
             if submitted:
                 insert_banner(b_title, b_img, b_link, b_start, b_end, int(b_order))
                 st.success("배너가 등록되었습니다.")
-                st.experimental_rerun()
+                st.rerun()
 
         # 배너 목록 + 삭제
         st.markdown("#### 📋 롤링 배너 목록")
@@ -750,7 +751,7 @@ with st.sidebar:
                 if st.button("삭제", key=f"del_banner_{b['id']}"):
                     delete_banner(int(b["id"]))
                     st.success("배너를 삭제했습니다.")
-                    st.experimental_rerun()
+                    st.rerun()
 
         # 게시글 수동 등록
         st.markdown("#### 📝 게시글 수동 등록")
@@ -778,7 +779,7 @@ with st.sidebar:
                     p_end,
                 )
                 st.success("게시글이 등록되었습니다.")
-                st.experimental_rerun()
+                st.rerun()
 
 # ------------------------
 # 메인 렌더링
