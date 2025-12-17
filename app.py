@@ -227,8 +227,17 @@ def init_db():
 # ------------------------
 def crawl_csr_list():
     """사회공헌활동 목록 페이지에서 제목/링크/작성일 추출."""
-    res = requests.get(CSR_URL, timeout=10)
-    res.raise_for_status()
+    try:
+        res = requests.get(CSR_URL, timeout=10)
+        if res.status_code != 200:
+            # 스트림릿에서 에러 대신 경고만 보여주고 넘어가게 처리
+            st.warning(f"사회공헌활동 페이지 요청 실패: HTTP {res.status_code}")
+            return []
+    except requests.RequestException as e:
+        st.warning(f"사회공헌활동 페이지 접속 오류: {e}")
+        return []
+
+    from bs4 import BeautifulSoup
     soup = BeautifulSoup(res.text, "lxml")
 
     rows = []
@@ -265,6 +274,7 @@ def crawl_csr_list():
             }
         )
     return rows
+
 
 
 def migrate_csr_list(conn):
