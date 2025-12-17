@@ -15,8 +15,6 @@ import sqlite3
 import pandas as pd
 from datetime import date
 import bcrypt
-import requests
-from bs4 import BeautifulSoup
 
 # ------------------------
 # 기본 설정 (SEO용 제목 등)
@@ -29,8 +27,6 @@ st.set_page_config(
 )
 
 DB_PATH = "kita.db"
-CSR_URL = "https://kpii.or.kr/board/%EC%82%AC%ED%9A%8C%EA%B3%B5%ED%97%8C%ED%99%9C%EB%8F%99/4/"  # 사회공헌활동 목록[web:63]
-
 
 @st.cache_resource
 def get_connection():
@@ -214,93 +210,6 @@ def init_db():
             dummy_posts,
         )
 
-    conn.commit()
-
-    # 사회공헌활동(csr) 게시판이 비어있으면 자동 마이그레이션
-    cur.execute("SELECT COUNT(*) FROM posts WHERE board='csr'")
-    if cur.fetchone()[0] == 0:
-        migrate_csr_list(conn)
-
-
-# ------------------------
-# kpii.or.kr 사회공헌활동 목록 크롤링
-# ------------------------
-def crawl_csr_list():
-    """사회공헌활동 목록 페이지에서 제목/링크/작성일 추출."""
-    try:
-        res = requests.get(CSR_URL, timeout=10)
-        if res.status_code != 200:
-            # 스트림릿에서 에러 대신 경고만 보여주고 넘어가게 처리
-            st.warning(f"사회공헌활동 페이지 요청 실패: HTTP {res.status_code}")
-            return []
-    except requests.RequestException as e:
-        st.warning(f"사회공헌활동 페이지 접속 오류: {e}")
-        return []
-
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(res.text, "lxml")
-
-    rows = []
-    table = soup.find("table")
-    if not table:
-        return rows
-
-    tbody = table.find("tbody")
-    if not tbody:
-        return rows
-
-    for tr in tbody.find_all("tr"):
-        tds = tr.find_all("td")
-        if len(tds) < 4:
-            continue
-        title_a = tds[1].find("a")
-        if not title_a:
-            continue
-        title = title_a.get_text(strip=True)
-        link = title_a["href"]
-        if link.startswith("/"):
-            link_url = "https://kpii.or.kr" + link
-        else:
-            link_url = "https://kpii.or.kr/" + link
-        writer = tds[2].get_text(strip=True)
-        created = tds[3].get_text(strip=True)
-
-        rows.append(
-            {
-                "title": title,
-                "link_url": link_url,
-                "writer": writer,
-                "created_at": created,
-            }
-        )
-    return rows
-
-
-
-def migrate_csr_list(conn):
-    """크롤링 결과를 posts(board='csr')에 INSERT."""
-    data = crawl_csr_list()
-    if not data:
-        return
-
-    cur = conn.cursor()
-    for item in data:
-        cur.execute(
-            """
-            INSERT INTO posts (board, title, content, image_url, link_url, start_date, end_date, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "csr",
-                item["title"],
-                f"작성자: {item['writer']}",
-                None,
-                item["link_url"],
-                item["created_at"][:10],
-                None,
-                item["created_at"],
-            ),
-        )
     conn.commit()
 
 
@@ -612,6 +521,7 @@ def render_footer():
 with st.sidebar:
     st.markdown("### 🔐 관리자")
 
+    # 로그인 전
     if not st.session_state.is_admin:
         username = st.text_input("Admin ID", value="admin")
         pw = st.text_input("비밀번호", type="password")
@@ -623,9 +533,12 @@ with st.sidebar:
                 st.rerun()
             else:
                 st.error("ID 또는 비밀번호가 올바르지 않습니다.")
+
+    # 로그인 후
     else:
         st.success(f"관리자 모드 ON ({st.session_state.admin_username})")
 
+        # 비밀번호 변경
         with st.expander("🔑 비밀번호 변경"):
             cur_pw = st.text_input("현재 비밀번호", type="password")
             new_pw = st.text_input("새 비밀번호", type="password")
@@ -650,19 +563,22 @@ with st.sidebar:
                     conn.commit()
                     st.success("비밀번호가 변경되었습니다.")
 
-        st.markdown("#### 📢 배너 등록")
+        # 🔻 여기부터가 롤링 배너(배너 슬라이드) 예시 폼 구조 통합 부분
+        st.markdown("#### 📢 롤링 배너 등록")
         with st.form("banner_form"):
             b_title = st.text_input("배너 제목")
             b_img = st.text_input("배너 이미지 URL")
             b_link = st.text_input("배너 링크 URL", value="https://kpii.or.kr/")
             b_start = st.date_input("시작일", value=date.today())
             b_end = st.date_input("종료일", value=date(2026, 12, 31))
-            b_order = st.number_input("정렬 순서", value=1, step=1)
-            if st.form_submit_button("배너 등록"):
+            b_order = st.number_input("노출 순서(작을수록 먼저)", value=1, step=1)
+            submitted = st.form_submit_button("배너 등록")
+            if submitted:
                 insert_banner(b_title, b_img, b_link, b_start, b_end, int(b_order))
                 st.success("배너가 등록되었습니다.")
                 st.rerun()
 
+        # 기타 게시글 수동 등록(공지/굿모닝/보고서/포토/소개/자료실)
         st.markdown("#### 📝 게시글 수동 등록")
         with st.form("post_form"):
             p_board = st.selectbox(
@@ -689,12 +605,6 @@ with st.sidebar:
                 )
                 st.success("게시글이 등록되었습니다.")
                 st.rerun()
-
-        if st.button("사회공헌활동 목록 다시 가져오기"):
-            conn = get_connection()
-            migrate_csr_list(conn)
-            st.success("사회공헌활동 목록 재마이그레이션 완료")
-            st.rerun()
 
 
 # ------------------------
